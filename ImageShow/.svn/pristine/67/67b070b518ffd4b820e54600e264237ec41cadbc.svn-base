@@ -1,0 +1,71 @@
+package com.suo.image.bean;
+
+import java.util.ArrayList;
+
+import cn.bmob.v3.BmobObject;
+
+public class UserInfo extends BmobObject {
+    private String userId;
+    private String username;
+    private String password;
+    private String nickname;
+    private String headPhoto;
+    private String city;
+    private String sex;
+    private ArrayList<String> uploadIds;
+    private ArrayList<String> likeIds;
+    public String getUsername() {
+        return username;
+    }
+    public void setUsername(String username) {
+        this.username = username;
+    }
+    public String getPassword() {
+        return password;
+    }
+    public void setPassword(String password) {
+        this.password = password;
+    }
+    public String getNickname() {
+        return nickname;
+    }
+    public void setNickname(String nickname) {
+        this.nickname = nickname;
+    }
+    public String getHeadPhoto() {
+        return headPhoto;
+    }
+    public void setHeadPhoto(String headPhoto) {
+        this.headPhoto = headPhoto;
+    }
+    public String getCity() {
+        return city;
+    }
+    public void setCity(String city) {
+        this.city = city;
+    }
+    public String getSex() {
+        return sex;
+    }
+    public void setSex(String sex) {
+        this.sex = sex;
+    }
+    public ArrayList<String> getUploadIds() {
+        return uploadIds;
+    }
+    public void setUploadIds(ArrayList<String> uploadIds) {
+        this.uploadIds = uploadIds;
+    }
+    public ArrayList<String> getLikeIds() {
+        return likeIds;
+    }
+    public void setLikeIds(ArrayList<String> likeIds) {
+        this.likeIds = likeIds;
+    }
+    public String getUserId() {
+        return userId;
+    }
+    public void setUserId(String userId) {
+        this.userId = userId;
+    }
+}

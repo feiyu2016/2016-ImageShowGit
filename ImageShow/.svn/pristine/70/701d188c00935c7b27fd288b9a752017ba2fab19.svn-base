@@ -1,0 +1,878 @@
+package com.suo.image.activity;
+
+import java.io.BufferedOutputStream;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.net.URL;
+import java.util.ArrayList;
+import java.util.List;
+
+import net.tsz.afinal.FinalBitmap;
+import cn.bmob.v3.BmobQuery;
+import cn.bmob.v3.BmobQuery.CachePolicy;
+import cn.bmob.v3.listener.FindListener;
+import cn.bmob.v3.listener.UpdateListener;
+
+import com.sina.weibo.sdk.api.share.BaseResponse;
+import com.sina.weibo.sdk.api.share.IWeiboHandler;
+import com.sina.weibo.sdk.api.share.IWeiboShareAPI;
+import com.sina.weibo.sdk.constant.WBConstants;
+import com.suo.demo.R;
+import com.suo.image.adapter.ArrayListAdapter;
+import com.suo.image.adapter.ViewHolder;
+import com.suo.image.bean.ContentBean;
+import com.suo.image.bean.ImageBean;
+import com.suo.image.img.SimpleImageLoader;
+import com.suo.image.share.QQUtil;
+import com.suo.image.share.QQZoneUtil;
+import com.suo.image.share.WeiboUtil;
+import com.suo.image.share.WeixinUtil;
+import com.suo.image.util.Density;
+import com.suo.image.util.ImageUtils;
+import com.suo.image.util.Log;
+import com.suo.image.util.Preference;
+import com.suo.image.util.Pub;
+import com.suo.image.view.MyGallery;
+import com.tencent.connect.common.Constants;
+import com.tencent.connect.share.QQShare;
+import com.tencent.mm.sdk.openapi.BaseReq;
+import com.tencent.mm.sdk.openapi.BaseResp;
+import com.tencent.mm.sdk.openapi.ConstantsAPI;
+import com.tencent.mm.sdk.openapi.IWXAPIEventHandler;
+import com.tencent.mm.sdk.openapi.SendMessageToWX;
+import com.tencent.mm.sdk.openapi.ShowMessageFromWX;
+import com.tencent.mm.sdk.openapi.WXAppExtendObject;
+import com.tencent.mm.sdk.openapi.WXImageObject;
+import com.tencent.mm.sdk.openapi.WXMediaMessage;
+import com.tencent.mm.sdk.openapi.WXWebpageObject;
+import com.tencent.tauth.IUiListener;
+import com.tencent.tauth.Tencent;
+import com.tencent.tauth.UiError;
+
+import android.annotation.SuppressLint;
+import android.app.Activity;
+import android.app.AlertDialog;
+import android.app.Dialog;
+import android.app.ProgressDialog;
+import android.app.WallpaperManager;
+import android.content.ClipboardManager;
+import android.content.Intent;
+import android.database.Cursor;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.graphics.Canvas;
+import android.graphics.PixelFormat;
+import android.graphics.drawable.BitmapDrawable;
+import android.graphics.drawable.Drawable;
+import android.net.Uri;
+import android.os.Bundle;
+import android.os.Environment;
+import android.os.Handler;
+import android.os.Message;
+import android.provider.MediaStore;
+import android.text.TextUtils;
+import android.view.Gravity;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewGroup;
+import android.view.Window;
+import android.view.WindowManager;
+import android.view.View.OnClickListener;
+import android.widget.AdapterView;
+import android.widget.ImageButton;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
+import android.widget.ListView;
+import android.widget.RelativeLayout;
+import android.widget.TextView;
+import android.widget.Toast;
+import android.widget.AdapterView.OnItemClickListener;
+import android.widget.AdapterView.OnItemSelectedListener;
+
+@SuppressLint("HandlerLeak")
+public class HotContentActivity extends BaseActivity implements IWXAPIEventHandler, IWeiboHandler.Response {
+
+    private MyGallery gallery;
+    private TextView tv_page;
+    private LinearLayout ll_zan;
+    private TextView tv_zan;
+    private ImageView iv_zan;
+
+    private ContentAdapter adapter;
+    private ContentBean bean;
+    private ArrayList<ContentBean> list;
+
+    private int position = 0;
+    private RelativeLayout layoutHeader;
+    private ImageButton back;
+    private ImageButton image_share;
+    private TextView newsContent;
+    private TextView top_title;
+    private boolean click = true;
+    private Dialog dialog;
+    private ProgressDialog progressDialog;
+    private boolean isShow = false;
+    private String text;
+    private ArrayList<ContentBean> contentList;
+
+    private WeiboUtil weiboUtil;
+    private QQZoneUtil qqZoneUtil;
+    private QQUtil qqUtil;
+    private WeixinUtil weixinUtil;
+
+    private int[] zanList;
+    private ContentBean cb;
+
+    int c_color = 1;// 文字颜色
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.news_picture);
+        prepareData();
+        findViews();
+        init();
+        if (savedInstanceState != null) {
+            weiboUtil.handleWeiboResponse(getIntent(), this);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void prepareData() {
+        position = getIntent().getIntExtra("position", 0);
+        bean = (ContentBean) getIntent().getSerializableExtra("contentBean");
+        list = (ArrayList<ContentBean>) getIntent().getSerializableExtra("contentBeanList");
+        contentList = new ArrayList<ContentBean>();
+        adapter = new ContentAdapter(this);
+        c_color = Preference.getInt("color");
+    }
+
+    private void findViews() {
+        gallery = (MyGallery) findViewById(R.id.picGallery);
+        layoutHeader = (RelativeLayout) findViewById(R.id.layoutHeader);
+        back = (ImageButton) findViewById(R.id.back);
+        image_share = (ImageButton) findViewById(R.id.share);
+        newsContent = (TextView) findViewById(R.id.newsContent);
+        top_title = (TextView) findViewById(R.id.text);
+        tv_page = (TextView) findViewById(R.id.tv_page);
+        ll_zan = (LinearLayout) findViewById(R.id.ll_zan);
+        tv_zan = (TextView) findViewById(R.id.tv_zan);
+        iv_zan = (ImageView) findViewById(R.id.iv_zan);
+
+    }
+
+    private void init() {
+        // 初始化微博
+        weiboUtil = new WeiboUtil(this);
+        // 初始化qq空间
+        qqZoneUtil = new QQZoneUtil(this);
+        weixinUtil = new WeixinUtil(this);
+        qqUtil = new QQUtil(this);
+        WeixinUtil.api.handleIntent(getIntent(), this);
+        // AppConnect.getInstance(this).initPopAd(this);
+
+        top_title.setText("" + bean.getContentText());
+        newsContent.setText("" + bean.getContentText());
+        contentList.addAll(list);
+        adapter.setList(contentList);
+        gallery.setAdapter(adapter);
+        gallery.setSelection(position);
+        // 用来判断是否在当前页赞过的数组
+        zanList = new int[contentList.size()];
+        for (int i = 0; i < contentList.size(); i++) {
+            zanList[i] = 0;
+        }
+        
+        if (c_color == 1) {
+            newsContent.setTextColor(getResources().getColor(R.color.white));
+        } else if (c_color == 2) {
+            newsContent.setTextColor(getResources().getColor(R.color.orange));
+        } else if (c_color == 3) {
+            newsContent.setTextColor(getResources().getColor(R.color.light_blue));
+        } else if (c_color == 4) {
+            newsContent.setTextColor(getResources().getColor(R.color.text_color_gray));
+        }
+
+        back.setOnClickListener(new OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                finish();
+            }
+        });
+
+        image_share.setOnClickListener(new OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                choseNewsDialog();
+            }
+        });
+
+        gallery.setOnItemClickListener(new OnItemClickListener() {
+            @Override
+            public void onItemClick(AdapterView<?> arg0, View arg1, int arg2, long arg3) {
+                if (click) {
+                    layoutHeader.setVisibility(View.GONE);
+                    newsContent.setVisibility(View.GONE);
+                    tv_page.setVisibility(View.GONE);
+                    ll_zan.setVisibility(View.GONE);
+                } else {
+                    layoutHeader.setVisibility(View.VISIBLE);
+                    newsContent.setVisibility(View.VISIBLE);
+                    tv_page.setVisibility(View.VISIBLE);
+                    ll_zan.setVisibility(View.VISIBLE);
+                }
+                click = !click;
+            }
+        });
+
+        gallery.setOnItemSelectedListener(new OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> arg0, View arg1, final int arg2, long arg3) {
+                position = arg2;
+                text = contentList.get(arg2).getContentText();
+                newsContent.setText("		" + text);
+                top_title.setText("" + text);
+                tv_page.setText((arg2 + 1) + "/" + contentList.size());
+                if (contentList.get(arg2).getZan().intValue() == 0) {
+                    tv_zan.setText("<0>");
+                } else {
+                    tv_zan.setText("<" + contentList.get(arg2).getZan().intValue() + ">");
+                }
+
+                // if (Pub.isWifi(PictureNetContentActivity.this)) {
+                // if (arg2 == (contentList.size() - 1) && !isShow) {
+                // AppConnect.getInstance(PictureNetContentActivity.this)
+                // .showPopAd(PictureNetContentActivity.this);
+                // isShow = true;
+                // }
+                // }
+                if (zanList[position] == 1) {
+                    iv_zan.setBackgroundResource(R.drawable.zan_selected);
+                } else {
+                    iv_zan.setBackgroundResource(R.drawable.zan_normal);
+                }
+                iv_zan.setOnClickListener(new OnClickListener() {
+                    @Override
+                    public void onClick(View v) {
+                        iv_zan.setClickable(false);
+                        if (zanList[position] == 1) {
+                            zanPic(arg2, true);
+                        } else {
+                            zanPic(arg2, false);
+                        }
+                    }
+                });
+
+                Log.e("position:" + position);
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> arg0) {
+
+            }
+        });
+
+    }
+
+    private void zanPic(final int pos, final boolean isZan) {
+        cb = new ContentBean();
+        BmobQuery<ContentBean> query = new BmobQuery<ContentBean>();
+        query.addWhereEqualTo("id", contentList.get(pos).getId());
+        query.setLimit(1);
+        query.findObjects(this, new FindListener<ContentBean>() {
+            @Override
+            public void onSuccess(List<ContentBean> object) {
+                if (object != null && object.size() > 0) {
+                    cb = object.get(0);
+                }
+                int count;
+                if (cb.getZan().intValue() == 0) {
+                    count = 0;
+                } else {
+                    count = cb.getZan().intValue();
+                }
+
+                if (isZan) {
+                    cb.setZan(count - 1);
+                } else {
+                    cb.setZan(count + 1);
+                }
+                cb.update(HotContentActivity.this, cb.getObjectId(), new UpdateListener() {
+                    @Override
+                    public void onSuccess() {
+                        if (isZan) {
+                            showToast("取消赞成功");
+                            zanList[pos] = 0;
+                            iv_zan.setBackgroundResource(R.drawable.zan_normal);
+                        } else {
+                            showToast("赞成功啦");
+                            zanList[pos] = 1;
+                            iv_zan.setBackgroundResource(R.drawable.zan_selected);
+                        }
+                        contentList.get(pos).setZan(cb.getZan().intValue());
+                        tv_zan.setText("<" + contentList.get(pos).getZan().intValue() + ">");
+                        iv_zan.setClickable(true);
+                    }
+
+                    @Override
+                    public void onFailure(int code, String msg) {
+                        showToast("网络异常");
+                        iv_zan.setClickable(true);
+                    }
+                });
+            }
+
+            @Override
+            public void onError(int code, String msg) {
+                showToast("网络异常");
+                iv_zan.setClickable(true);
+            }
+        });
+    }
+
+    private void choseNewsDialog() {
+        dialog = new Dialog(this, R.style.KADialog1);
+        dialog.setContentView(R.layout.share);
+        dialog.setCanceledOnTouchOutside(true);
+        Window window = dialog.getWindow();
+        window.setBackgroundDrawableResource(R.color.dialog_transparent);
+        window.setGravity(Gravity.TOP);
+        WindowManager.LayoutParams lp = dialog.getWindow().getAttributes();
+        lp.width = (int) (Density.getSceenWidth(this) * 2 / 5); // 设置宽度
+        lp.x = Density.getSceenWidth(this) / 2 - lp.width / 2 - 2;//
+        dialog.getWindow().setAttributes(lp);
+        dialog.show();
+        LinearLayout lv, lv1, lv2, lv3, lv5, lv6;
+        lv = (LinearLayout) dialog.findViewById(R.id.tv);
+        lv1 = (LinearLayout) dialog.findViewById(R.id.tv1);
+        lv2 = (LinearLayout) dialog.findViewById(R.id.tv2);
+        lv3 = (LinearLayout) dialog.findViewById(R.id.tv3);
+        lv5 = (LinearLayout) dialog.findViewById(R.id.tv5);
+        lv6 = (LinearLayout) dialog.findViewById(R.id.tv6);
+        lv6.setVisibility(View.VISIBLE);
+        lv5.setVisibility(View.VISIBLE);
+        lv3.setVisibility(View.VISIBLE);
+        lv2.setVisibility(View.VISIBLE);
+        lv1.setVisibility(View.GONE);
+        lv.setOnClickListener(new OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                dialog.dismiss();
+            }
+        });
+        // 设置壁纸
+        lv1.setOnClickListener(new OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                progressDialog = new ProgressDialog(HotContentActivity.this);
+                progressDialog.setTitle("提示");
+                progressDialog.setMessage("请稍候");
+                progressDialog.show();
+                new Thread() {
+                    public void run() {
+                        Drawable d = Pub.getLocalDrawable(HotContentActivity.this, contentList.get(position)
+                                .getContentUrl());
+                        Bitmap bmp = drawableToBitmap(d);
+                        putWallpaper(bmp);
+                    }
+                }.start();
+            }
+        });
+        // 保存图片
+        lv2.setOnClickListener(new OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                int position = gallery.getSelectedItemPosition();
+                String url = contentList.get(position).getContentUrl();
+                Drawable drawable;
+                if (url != null && !url.equals("")) {
+                    Pub.downloadDrawableByUrl(HotContentActivity.this, url);
+                    drawable = Pub.getLocalDrawable(HotContentActivity.this, url);
+                    BitmapDrawable bd = (BitmapDrawable) drawable;
+                    if (bd != null) {
+                        Bitmap bm = bd.getBitmap();
+                        try {
+                            saveFile(bm, "" + System.currentTimeMillis());
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
+                    }
+                }
+            }
+        });
+        // 分享
+        lv3.setOnClickListener(new OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                dialog.dismiss();
+                View view = LayoutInflater.from(HotContentActivity.this).inflate(R.layout.dialog_share, null);
+                final Dialog d_dialog = new Dialog(HotContentActivity.this, R.style.upload_dialog);
+                d_dialog.setContentView(view);
+                Window window = d_dialog.getWindow();
+                window.setBackgroundDrawableResource(R.color.dialog_transparent);
+                window.setGravity(Gravity.TOP);
+                WindowManager.LayoutParams lp = d_dialog.getWindow().getAttributes();
+                lp.width = (int) (Density.getSceenWidth(HotContentActivity.this) * 3 / 4); // 设置宽度
+                lp.y = (int) (Density.getSceenHeight(HotContentActivity.this) * 1 / 3);
+                d_dialog.getWindow().setAttributes(lp);
+                d_dialog.show();
+                ImageView iv_weibo = (ImageView) view.findViewById(R.id.iv_weibo);
+                ImageView iv_qq = (ImageView) view.findViewById(R.id.iv_qq);
+                ImageView iv_qzone = (ImageView) view.findViewById(R.id.iv_qzone);
+                ImageView iv_weixin = (ImageView) view.findViewById(R.id.iv_weixin);
+                ImageView iv_circle = (ImageView) view.findViewById(R.id.iv_circle);
+
+                iv_weibo.setOnClickListener(new OnClickListener() {
+                    @Override
+                    public void onClick(View v) {
+                        d_dialog.dismiss();
+                        weiboUtil.registerApp();
+                        if (weiboUtil.checkEnvironment(true)) {
+                            int position2 = gallery.getSelectedItemPosition();
+                            String url2 = contentList.get(position2).getContentUrl();
+                            weiboUtil.sendMessage(true, true, text, url2);
+                        }
+                    }
+                });
+                iv_qq.setOnClickListener(new OnClickListener() {
+                    @Override
+                    public void onClick(View v) {
+                        d_dialog.dismiss();
+                        int position3 = gallery.getSelectedItemPosition();
+                        String url3 = contentList.get(position3).getContentUrl();
+                        final Bundle params = new Bundle();
+                        params.putString(QQShare.SHARE_TO_QQ_IMAGE_URL, url3);
+                        params.putString(QQShare.SHARE_TO_QQ_TARGET_URL, "http://a.app.qq.com/o/simple.jsp?pkgname=com.suo.demo");
+                        params.putString(QQShare.SHARE_TO_QQ_APP_NAME, "美图Show");
+                        params.putString(QQShare.SHARE_TO_QQ_SUMMARY, text);
+                        params.putString(QQShare.SHARE_TO_QQ_TITLE, "美图Show");
+                        qqUtil.doShareToQQ(params, qqShareListener);
+                    }
+                });
+                iv_qzone.setOnClickListener(new OnClickListener() {
+                    @Override
+                    public void onClick(View v) {
+                        d_dialog.dismiss();
+                        int position3 = gallery.getSelectedItemPosition();
+                        String url3 = contentList.get(position3).getContentUrl();
+                        qqZoneUtil.doShareToQzone(text, url3);
+                    }
+                });
+                iv_weixin.setOnClickListener(new OnClickListener() {
+                    @Override
+                    public void onClick(View v) {
+                        d_dialog.dismiss();
+                        int position3 = gallery.getSelectedItemPosition();
+                        final String url3 = contentList.get(position3).getContentUrl();
+                        new Thread(){
+                            public void run(){
+                                try{
+//                                    WXImageObject imgObj = new WXImageObject();
+//                                    imgObj.imageUrl = url3;
+//                                    
+//                                    WXMediaMessage msg = new WXMediaMessage();
+//                                    msg.mediaObject = imgObj;
+//                                    msg.description = text;
+//                                    msg.title = text;
+//
+//                                    Bitmap bmp = BitmapFactory.decodeStream(new URL(url3).openStream());
+//                                    Bitmap thumbBmp = Bitmap.createScaledBitmap(bmp, 150, 150, true);
+//                                    bmp.recycle();
+//                                    msg.thumbData = ImageUtils.bmpToByteArray(thumbBmp, true);
+//                                    
+//                                    SendMessageToWX.Req req = new SendMessageToWX.Req();
+//                                    req.transaction = "img"+System.currentTimeMillis();
+//                                    req.message = msg;
+//                                    
+//                                    WeixinUtil.api.sendReq(req);
+                                    WXWebpageObject webpage = new WXWebpageObject();
+                                    webpage.webpageUrl = url3;
+
+                                    WXMediaMessage msg = new WXMediaMessage();
+                                    msg.mediaObject = webpage;
+                                    msg.description = "来自美图Show";
+                                    msg.title = text;
+
+                                    Bitmap bmp = BitmapFactory.decodeStream(new URL(url3).openStream());
+                                    Bitmap thumbBmp = Bitmap.createScaledBitmap(bmp, 150, 150, true);
+                                    bmp.recycle();
+                                    msg.thumbData = ImageUtils.bmpToByteArray(thumbBmp, true);
+
+                                    SendMessageToWX.Req req = new SendMessageToWX.Req();
+                                    req.transaction = "webpage";
+                                    req.message = msg;
+
+                                    WeixinUtil.api.sendReq(req);
+                                } catch(Exception e) {
+                                    e.printStackTrace();
+                                } 
+                            }
+                        }.start();
+                    }
+                });
+                
+                iv_circle.setOnClickListener(new OnClickListener() {
+                    @Override
+                    public void onClick(View v) {
+                        d_dialog.dismiss();
+                        int position3 = gallery.getSelectedItemPosition();
+                        final String url3 = contentList.get(position3).getContentUrl();
+                        new Thread(){
+                            public void run(){
+                                try{
+//                                    WXImageObject imgObj = new WXImageObject();
+//                                    imgObj.imageUrl = url3;
+//                                    
+//                                    WXMediaMessage msg = new WXMediaMessage();
+//                                    msg.mediaObject = imgObj;
+//                                    msg.description = text;
+//                                    msg.title = text;
+//
+//                                    Bitmap bmp = BitmapFactory.decodeStream(new URL(url3).openStream());
+//                                    Bitmap thumbBmp = Bitmap.createScaledBitmap(bmp, 150, 150, true);
+//                                    bmp.recycle();
+//                                    msg.thumbData = ImageUtils.bmpToByteArray(thumbBmp, true);
+//                                    
+//                                    SendMessageToWX.Req req = new SendMessageToWX.Req();
+//                                    req.transaction = "img"+System.currentTimeMillis();
+//                                    req.message = msg;
+//                                    req.scene = SendMessageToWX.Req.WXSceneTimeline;
+//                                    WeixinUtil.api.sendReq(req);
+                                    WXWebpageObject webpage = new WXWebpageObject();
+                                    webpage.webpageUrl = url3;
+
+                                    WXMediaMessage msg = new WXMediaMessage();
+                                    msg.mediaObject = webpage;
+                                    msg.description = "来自美图Show";
+                                    msg.title = text;
+
+                                    Bitmap bmp = BitmapFactory.decodeStream(new URL(url3).openStream());
+                                    Bitmap thumbBmp = Bitmap.createScaledBitmap(bmp, 150, 150, true);
+                                    bmp.recycle();
+                                    msg.thumbData = ImageUtils.bmpToByteArray(thumbBmp, true);
+
+                                    SendMessageToWX.Req req = new SendMessageToWX.Req();
+                                    req.transaction = "webpage";
+                                    req.message = msg;
+                                    req.scene = SendMessageToWX.Req.WXSceneTimeline;
+                                    WeixinUtil.api.sendReq(req);
+                                } catch(Exception e) {
+                                    e.printStackTrace();
+                                } 
+                            }
+                        }.start();
+                        
+                    }
+                });
+
+            }
+        });
+        // 复制文本
+        lv5.setOnClickListener(new OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                copy(text);
+            }
+        });
+        lv6.setOnClickListener(new OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                dialog.dismiss();
+                View view = LayoutInflater.from(HotContentActivity.this).inflate(
+                        R.layout.dialog_choose_text_color, null);
+                final Dialog d_dialog = new Dialog(HotContentActivity.this, R.style.upload_dialog);
+                d_dialog.setContentView(view);
+                Window window = d_dialog.getWindow();
+                window.setBackgroundDrawableResource(R.color.dialog_transparent);
+                window.setGravity(Gravity.TOP);
+                WindowManager.LayoutParams lp = d_dialog.getWindow().getAttributes();
+                lp.width = (int) (Density.getSceenWidth(HotContentActivity.this) * 3 / 4); // 设置宽度
+                lp.y = (int) (Density.getSceenHeight(HotContentActivity.this) * 1 / 3);
+                d_dialog.getWindow().setAttributes(lp);
+                d_dialog.show();
+                final TextView tv_text = (TextView) view.findViewById(R.id.tv_text);
+                final TextView tv_color1 = (TextView) view.findViewById(R.id.tv_color1);
+                final TextView tv_color2 = (TextView) view.findViewById(R.id.tv_color2);
+                final TextView tv_color3 = (TextView) view.findViewById(R.id.tv_color3);
+                final TextView tv_color4 = (TextView) view.findViewById(R.id.tv_color4);
+                final TextView tv_ok = (TextView) view.findViewById(R.id.tv_ok);
+                final TextView tv_cancel = (TextView) view.findViewById(R.id.tv_cancel);
+                tv_color1.setOnClickListener(new OnClickListener() {
+                    @Override
+                    public void onClick(View v) {
+                        c_color = 1;
+                        tv_text.setTextColor(getResources().getColor(R.color.white));
+                    }
+                });
+                tv_color2.setOnClickListener(new OnClickListener() {
+                    @Override
+                    public void onClick(View v) {
+                        c_color = 2;
+                        tv_text.setTextColor(getResources().getColor(R.color.orange));
+                    }
+                });
+                tv_color3.setOnClickListener(new OnClickListener() {
+                    @Override
+                    public void onClick(View v) {
+                        c_color = 3;
+                        tv_text.setTextColor(getResources().getColor(R.color.light_blue));
+                    }
+                });
+                tv_color4.setOnClickListener(new OnClickListener() {
+                    @Override
+                    public void onClick(View v) {
+                        c_color = 4;
+                        tv_text.setTextColor(getResources().getColor(R.color.text_color_gray));
+                    }
+                });
+                tv_ok.setOnClickListener(new OnClickListener() {
+                    @Override
+                    public void onClick(View v) {
+                        d_dialog.dismiss();
+                        Preference.putInt("color", c_color);
+                        if (c_color == 1) {
+                            newsContent.setTextColor(getResources().getColor(R.color.white));
+                        } else if (c_color == 2) {
+                            newsContent.setTextColor(getResources().getColor(R.color.orange));
+                        } else if (c_color == 3) {
+                            newsContent.setTextColor(getResources().getColor(R.color.light_blue));
+                        } else if (c_color == 4) {
+                            newsContent.setTextColor(getResources().getColor(R.color.text_color_gray));
+                        }
+
+                    }
+                });
+                tv_cancel.setOnClickListener(new OnClickListener() {
+                    @Override
+                    public void onClick(View v) {
+                        d_dialog.dismiss();
+                    }
+                });
+            }
+        });
+
+    }
+
+    /**
+     * 实现文本复制功能
+     * 
+     * @param content
+     */
+    @SuppressLint("NewApi")
+    @SuppressWarnings("deprecation")
+    public void copy(String content) {
+        ClipboardManager cbm = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+        cbm.setText(content);
+        showToast("已复制至剪贴板..");
+    }
+
+    /**
+     * 接收微客户端博请求的数据。 当微博客户端唤起当前应用并进行分享时，该方法被调用。
+     * 
+     * @param baseRequest 微博请求数据对象
+     * @see {@link IWeiboShareAPI#handleWeiboRequest}
+     */
+    @Override
+    public void onResponse(BaseResponse baseResp) {
+        switch (baseResp.errCode) {
+            case WBConstants.ErrorCode.ERR_OK:
+                Toast.makeText(this, R.string.weibosdk_demo_toast_share_success, Toast.LENGTH_LONG).show();
+                break;
+            case WBConstants.ErrorCode.ERR_CANCEL:
+                Toast.makeText(this, R.string.weibosdk_demo_toast_share_canceled, Toast.LENGTH_LONG).show();
+                break;
+            case WBConstants.ErrorCode.ERR_FAIL:
+                Toast.makeText(this,
+                        getString(R.string.weibosdk_demo_toast_share_failed) + "Error Message: " + baseResp.errMsg,
+                        Toast.LENGTH_LONG).show();
+                break;
+        }
+    }
+
+    /**
+     * @see {@link Activity#onNewIntent}
+     */
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+
+        // 从当前应用唤起微博并进行分享后，返回到当前应用时，需要在此处调用该函数
+        // 来接收微博客户端返回的数据；执行成功，返回 true，并调用
+        // {@link IWeiboHandler.Response#onResponse}；失败返回 false，不调用上述回调
+        weiboUtil.handleWeiboResponse(intent, this);
+
+        setIntent(intent);
+        WeixinUtil.api.handleIntent(intent, this);
+    }
+
+    public static Bitmap drawableToBitmap(Drawable drawable) {
+        // ȡ drawable �ĳ���
+        int w = drawable.getIntrinsicWidth();
+        int h = drawable.getIntrinsicHeight();
+
+        // ȡ drawable ����ɫ��ʽ
+        Bitmap.Config config = drawable.getOpacity() != PixelFormat.OPAQUE ? Bitmap.Config.ARGB_8888
+                : Bitmap.Config.RGB_565;
+        // ������Ӧ bitmap
+        Bitmap bitmap = Bitmap.createBitmap(w, h, config);
+        // ������Ӧ bitmap �Ļ���
+        Canvas canvas = new Canvas(bitmap);
+        drawable.setBounds(0, 0, w, h);
+        // �� drawable ���ݻ���������
+        drawable.draw(canvas);
+        return bitmap;
+    }
+
+    /**
+     * �������汳��
+     */
+    private void putWallpaper(Bitmap bitmap) {
+        try {
+            /*
+             * int width = getWindowManager().getDefaultDisplay().getWidth(); int height =
+             * getWindowManager().getDefaultDisplay().getHeight(); bitmap = Bitmap.createScaledBitmap(bitmap, width,
+             * bitmap.getHeight(), true);
+             */
+            WallpaperManager wallpaperManager = WallpaperManager.getInstance(this);
+            wallpaperManager.setBitmap(bitmap);
+            progressDialog.dismiss();
+            handler.sendEmptyMessage(1);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    // state 2���� 3����
+    public void saveFile(Bitmap bm, String fileName) throws IOException {
+        String path = Environment.getExternalStorageDirectory().getAbsolutePath() + "/imageshow/";
+        File dirFile = new File(path);
+        if (!dirFile.exists()) {
+            dirFile.mkdir();
+        }
+        File myCaptureFile = new File(path + fileName + ".JPEG");
+
+        BufferedOutputStream bos = new BufferedOutputStream(new FileOutputStream(myCaptureFile));
+        bm.compress(Bitmap.CompressFormat.JPEG, 80, bos);
+        bos.flush();
+        bos.close();
+        Toast.makeText(this, "图片保存成功至/sdcard/imageshow/", Toast.LENGTH_LONG).show();
+        fileScan(path + fileName + ".JPEG");
+    }
+
+    // 保存图片后进行手动刷新 不然在SD卡中不展示
+    public void fileScan(String filePath) {
+        Uri data = Uri.parse("file://" + filePath);
+        sendBroadcast(new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE, data));
+    }
+
+    private Handler handler = new Handler() {
+        @Override
+        public void handleMessage(Message msg) {
+            switch (msg.what) {
+                case 1:
+                    Toast.makeText(HotContentActivity.this, "设置桌面背景成功", Toast.LENGTH_LONG).show();
+                    break;
+                default:
+                    break;
+            }
+            super.handleMessage(msg);
+        }
+    };
+
+    class ContentAdapter extends ArrayListAdapter<ContentBean> {
+
+        private BaseActivity context;
+        @SuppressWarnings("unused")
+        private FinalBitmap fb;
+
+        public ContentAdapter(BaseActivity context) {
+            super(context);
+            this.context = context;
+        }
+
+        public ContentAdapter(BaseActivity context, ListView listView) {
+            super(context, listView);
+            this.context = context;
+        }
+
+        @Override
+        public View getView(int position, View convertView, ViewGroup parent) {
+            if (convertView == null) {
+                convertView = LayoutInflater.from(context).inflate(R.layout.picture_list_gallery_item, parent, false);
+            }
+
+            ImageView image = ViewHolder.get(convertView, R.id.galleryPicView);
+
+            final ContentBean contentBean = (ContentBean) getItem(position);
+            String url = contentBean.getContentUrl();
+            SimpleImageLoader.display(context, image, url, R.drawable.default_image);
+            return convertView;
+        }
+
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        if (requestCode == Constants.REQUEST_QQ_SHARE) {
+            if (resultCode == Constants.ACTIVITY_OK) {
+                Tencent.handleResultData(data, qqShareListener);
+            }
+        }
+    }
+
+    IUiListener qqShareListener = new IUiListener() {
+        @Override
+        public void onCancel() {
+            // showToast("onCancel: ");
+        }
+
+        @Override
+        public void onComplete(Object response) {
+            // showToast("onComplete: " + response.toString());
+        }
+
+        @Override
+        public void onError(UiError e) {
+            // showToast("onError: " + e.errorMessage);
+        }
+    };
+
+    // 微信发送请求到第三方应用时，会回调到该方法
+    @Override
+    public void onReq(BaseReq req) {
+        switch (req.getType()) {
+//            case ConstantsAPI.COMMAND_GETMESSAGE_FROM_WX:
+//                goToGetMsg();
+//                break;
+//            case ConstantsAPI.COMMAND_SHOWMESSAGE_FROM_WX:
+//                goToShowMsg((ShowMessageFromWX.Req) req);
+//                break;
+            default:
+                break;
+        }
+    }
+
+    // 第三方应用发送到微信的请求处理后的响应结果，会回调到该方法
+    @Override
+    public void onResp(BaseResp resp) {
+        int result = 0;
+
+        switch (resp.errCode) {
+//            case BaseResp.ErrCode.ERR_OK:
+//                result = R.string.errcode_success;
+//                break;
+//            case BaseResp.ErrCode.ERR_USER_CANCEL:
+//                result = R.string.errcode_cancel;
+//                break;
+//            case BaseResp.ErrCode.ERR_AUTH_DENIED:
+//                result = R.string.errcode_deny;
+//                break;
+//            default:
+//                result = R.string.errcode_unknown;
+//                break;
+        }
+        Toast.makeText(this, result, Toast.LENGTH_LONG).show();
+    }
+    
+}

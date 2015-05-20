@@ -1,0 +1,83 @@
+package com.suo.image.activity;
+
+import java.util.List;
+
+import cn.bmob.v3.BmobQuery;
+import cn.bmob.v3.BmobUser;
+import cn.bmob.v3.listener.SaveListener;
+import cn.bmob.v3.listener.FindListener;
+
+import com.suo.demo.R;
+import com.suo.image.ImageApp;
+import com.suo.image.bean.UserInfo;
+import com.suo.image.util.Preference;
+
+import android.os.Bundle;
+import android.os.Handler;
+import android.text.TextUtils;
+
+public class SplashActivity extends BaseActivity {
+
+    private String username;
+    private String password;
+    
+	@Override
+	protected void onCreate(Bundle savedInstanceState) {
+		super.onCreate(savedInstanceState);
+		setContentView(R.layout.splash);
+		
+		username = Preference.getString("username");
+		password = Preference.getString("password");
+		
+		if (!TextUtils.isEmpty(username) && !TextUtils.isEmpty(password)){
+		    final BmobUser user = new BmobUser();
+	        user.setUsername(username);
+	        user.setPassword(password);
+	        user.login(this, new SaveListener() {
+	            @Override
+	            public void onSuccess() {
+	                BmobUser bmobuser = BmobUser.getCurrentUser(SplashActivity.this);
+	                if (bmobuser != null){
+	                    BmobQuery<UserInfo> query = new BmobQuery<UserInfo>();
+	                    query.addWhereEqualTo("userId", user.getObjectId());
+	                    query.findObjects(SplashActivity.this, new FindListener<UserInfo>() {
+	                            @Override
+	                            public void onSuccess(List<UserInfo> object) {
+	                                if (object!=null && object.size()>0){
+	                                    ImageApp.getInstance().setUserinfo(object.get(0));
+	                                    launch(Main_new.class);
+	                                    finish();
+	                                }
+	                            }
+	                            @Override
+	                            public void onError(int code, String msg) {
+	                                launch(Main_new.class);
+	                                finish();
+	                            }
+	                    });
+	                }
+	            }
+	            
+	            @Override
+	            public void onFailure(int arg0, String arg1) {
+	                new Handler().postDelayed(new Runnable() {
+	                    @Override
+	                    public void run() {
+	                        launch(Main_new.class);
+	                        finish();
+	                    }
+	                }, 2000);
+	            }
+	        });
+		}else{
+		    new Handler().postDelayed(new Runnable() {
+                @Override
+                public void run() {
+                    launch(Main_new.class);
+                    finish();
+                }
+            }, 2000);
+		}
+	}
+
+}
