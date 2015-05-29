@@ -11,9 +11,7 @@ import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
 
-import net.tsz.afinal.FinalBitmap;
 import cn.bmob.v3.BmobQuery;
-import cn.bmob.v3.BmobQuery.CachePolicy;
 import cn.bmob.v3.BmobUser;
 import cn.bmob.v3.listener.FindListener;
 import cn.bmob.v3.listener.UpdateListener;
@@ -31,7 +29,6 @@ import com.suo.image.adapter.ViewHolder;
 import com.suo.image.bean.ContentBean;
 import com.suo.image.bean.ImageBean;
 import com.suo.image.bean.UserInfo;
-import com.suo.image.img.SimpleImageLoader;
 import com.suo.image.share.QQUtil;
 import com.suo.image.share.QQZoneUtil;
 import com.suo.image.share.WeiboUtil;
@@ -48,12 +45,8 @@ import com.tencent.connect.common.Constants;
 import com.tencent.connect.share.QQShare;
 import com.tencent.mm.sdk.openapi.BaseReq;
 import com.tencent.mm.sdk.openapi.BaseResp;
-import com.tencent.mm.sdk.openapi.ConstantsAPI;
 import com.tencent.mm.sdk.openapi.IWXAPIEventHandler;
 import com.tencent.mm.sdk.openapi.SendMessageToWX;
-import com.tencent.mm.sdk.openapi.ShowMessageFromWX;
-import com.tencent.mm.sdk.openapi.WXAppExtendObject;
-import com.tencent.mm.sdk.openapi.WXImageObject;
 import com.tencent.mm.sdk.openapi.WXMediaMessage;
 import com.tencent.mm.sdk.openapi.WXWebpageObject;
 import com.tencent.tauth.IUiListener;
@@ -62,25 +55,21 @@ import com.tencent.tauth.UiError;
 
 import android.annotation.SuppressLint;
 import android.app.Activity;
-import android.app.AlertDialog;
 import android.app.Dialog;
 import android.app.ProgressDialog;
 import android.app.WallpaperManager;
 import android.content.ClipboardManager;
 import android.content.Intent;
-import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.PixelFormat;
-import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
 import android.os.Message;
-import android.provider.MediaStore;
 import android.text.TextUtils;
 import android.view.Gravity;
 import android.view.LayoutInflater;
@@ -90,12 +79,12 @@ import android.view.Window;
 import android.view.WindowManager;
 import android.view.View.OnClickListener;
 import android.widget.AdapterView;
+import android.widget.AdapterView.OnItemLongClickListener;
 import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ListView;
 import android.widget.RelativeLayout;
-import android.widget.SlidingDrawer;
 import android.widget.TextView;
 import android.widget.Toast;
 import android.widget.AdapterView.OnItemClickListener;
@@ -142,11 +131,6 @@ public class PictureNetContentActivity extends BaseActivity implements IWXAPIEve
     private String saveUrl;
     private ProgressDialog mSaveDialog = null;
     private Bitmap saveBitmap;
-    
-    //抽屉
-    private SlidingDrawer sliding;
-    private LinearLayout sliding_content;
-    private ImageView sliding_handle;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -190,10 +174,6 @@ public class PictureNetContentActivity extends BaseActivity implements IWXAPIEve
         iv_zan = (ImageView) findViewById(R.id.iv_zan);
         iv_head = (ImageView) findViewById(R.id.iv_head);
 
-        sliding = (SlidingDrawer) findViewById(R.id.sliding);
-        sliding_content = (LinearLayout) findViewById(R.id.sliding_content);
-        sliding_handle = (ImageView) findViewById(R.id.sliding_handle);
-        sliding.animateOpen();
     }
 
     private void queryData() {
@@ -277,6 +257,15 @@ public class PictureNetContentActivity extends BaseActivity implements IWXAPIEve
                 choseNewsDialog();
             }
         });
+        
+        gallery.setOnItemLongClickListener(new OnItemLongClickListener() {
+			@Override
+			public boolean onItemLongClick(AdapterView<?> parent, View view,
+					int position, long id) {
+				choseNewsDialog();
+				return false;
+			}
+		});
 
         gallery.setOnItemClickListener(new OnItemClickListener() {
             @Override
@@ -527,21 +516,9 @@ public class PictureNetContentActivity extends BaseActivity implements IWXAPIEve
             public void onClick(View v) {
                 int position = gallery.getSelectedItemPosition();
                 saveUrl = contentList.get(position).getContentUrl();
-//                        Drawable drawable;
                         if (!TextUtils.isEmpty(saveUrl)) {
                             mSaveDialog = ProgressDialog.show(PictureNetContentActivity.this, "保存图片", "图片正在保存中，请稍等...", true);  
                             new Thread(connectNet).start();  
-//                            Pub.downloadDrawableByUrl(PictureNetContentActivity.this, url);
-//                            drawable = Pub.getLocalDrawable(PictureNetContentActivity.this, url);
-//                            BitmapDrawable bd = (BitmapDrawable) drawable;
-//                            if (bd != null) {
-//                                Bitmap bm = bd.getBitmap();
-//                                try {
-//                                    saveFile(bm, "" + System.currentTimeMillis());
-//                                } catch (IOException e) {
-//                                    e.printStackTrace();
-//                                }
-//                            }
                         }
             }
         });
@@ -613,24 +590,6 @@ public class PictureNetContentActivity extends BaseActivity implements IWXAPIEve
                         new Thread() {
                             public void run() {
                                 try {
-                                    // WXImageObject imgObj = new WXImageObject();
-                                    // imgObj.imageUrl = url3;
-                                    //
-                                    // WXMediaMessage msg = new WXMediaMessage();
-                                    // msg.mediaObject = imgObj;
-                                    // msg.description = text;
-                                    // msg.title = text;
-                                    //
-                                    // Bitmap bmp = BitmapFactory.decodeStream(new URL(url3).openStream());
-                                    // Bitmap thumbBmp = Bitmap.createScaledBitmap(bmp, 150, 150, true);
-                                    // bmp.recycle();
-                                    // msg.thumbData = ImageUtils.bmpToByteArray(thumbBmp, true);
-                                    //
-                                    // SendMessageToWX.Req req = new SendMessageToWX.Req();
-                                    // req.transaction = "img"+System.currentTimeMillis();
-                                    // req.message = msg;
-                                    //
-                                    // WeixinUtil.api.sendReq(req);
                                     WXWebpageObject webpage = new WXWebpageObject();
                                     webpage.webpageUrl = url3;
 
@@ -666,24 +625,6 @@ public class PictureNetContentActivity extends BaseActivity implements IWXAPIEve
                         new Thread() {
                             public void run() {
                                 try {
-                                    // WXImageObject imgObj = new WXImageObject();
-                                    // imgObj.imageUrl = url3;
-                                    //
-                                    // WXMediaMessage msg = new WXMediaMessage();
-                                    // msg.mediaObject = imgObj;
-                                    // msg.description = text;
-                                    // msg.title = text;
-                                    //
-                                    // Bitmap bmp = BitmapFactory.decodeStream(new URL(url3).openStream());
-                                    // Bitmap thumbBmp = Bitmap.createScaledBitmap(bmp, 150, 150, true);
-                                    // bmp.recycle();
-                                    // msg.thumbData = ImageUtils.bmpToByteArray(thumbBmp, true);
-                                    //
-                                    // SendMessageToWX.Req req = new SendMessageToWX.Req();
-                                    // req.transaction = "img"+System.currentTimeMillis();
-                                    // req.message = msg;
-                                    // req.scene = SendMessageToWX.Req.WXSceneTimeline;
-                                    // WeixinUtil.api.sendReq(req);
                                     WXWebpageObject webpage = new WXWebpageObject();
                                     webpage.webpageUrl = url3;
 
@@ -749,7 +690,6 @@ public class PictureNetContentActivity extends BaseActivity implements IWXAPIEve
                         c_color = 1;
                         changeColor(c_color);
                         d_dialog.dismiss();
-//                        tv_text.setTextColor(getResources().getColor(R.color.white));
                     }
                 });
                 tv_color2.setOnClickListener(new OnClickListener() {
@@ -758,7 +698,6 @@ public class PictureNetContentActivity extends BaseActivity implements IWXAPIEve
                         c_color = 2;
                         changeColor(c_color);
                         d_dialog.dismiss();
-//                        tv_text.setTextColor(getResources().getColor(R.color.orange));
                     }
                 });
                 tv_color3.setOnClickListener(new OnClickListener() {
@@ -767,7 +706,6 @@ public class PictureNetContentActivity extends BaseActivity implements IWXAPIEve
                         c_color = 3;
                         changeColor(c_color);
                         d_dialog.dismiss();
-//                        tv_text.setTextColor(getResources().getColor(R.color.light_blue));
                     }
                 });
                 tv_color4.setOnClickListener(new OnClickListener() {
@@ -776,7 +714,6 @@ public class PictureNetContentActivity extends BaseActivity implements IWXAPIEve
                         c_color = 4;
                         changeColor(c_color);
                         d_dialog.dismiss();
-//                        tv_text.setTextColor(getResources().getColor(R.color.text_color_gray));
                     }
                 });
                 tv_ok.setOnClickListener(new OnClickListener() {

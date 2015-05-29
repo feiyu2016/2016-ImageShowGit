@@ -102,29 +102,5 @@
                 android:textSize="14sp" />
         </LinearLayout>
     </ScrollView>
-    
-    <SlidingDrawer
-        android:id="@+id/sliding"
-        android:layout_width="match_parent"
-        android:layout_height="160dp"
-        android:layout_gravity="bottom"
-        android:content="@+id/sliding_content"
-        android:handle="@+id/sliding_handle"
-        android:orientation="vertical" >
- 
-        <LinearLayout
-            android:orientation="vertical"
-            android:id="@+id/sliding_content"
-            android:layout_width="match_parent"
-            android:layout_height="130dp"
-            android:background="@color/white"
-            android:padding="10dp"/>
- 
-        <ImageView
-            android:id="@+id/sliding_handle"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:src="@drawable/menu_normal" />
-    </SlidingDrawer>
 
 </FrameLayout>

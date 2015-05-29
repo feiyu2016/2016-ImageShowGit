@@ -112,6 +112,7 @@ public class AddImageTextActivity extends BaseActivity {
 //		add();
 //		uploadWords();
 //		change();
+		guanlian();
 	}
 	ArrayList<ContentBean> list;
     private void change() {
@@ -476,6 +477,74 @@ public class AddImageTextActivity extends BaseActivity {
 			public void onFailure(int code, String msg) {
 				showToast("上传图文失败：" + msg);
 				Log.e("code:" + code + "|msg:" + msg);
+			}
+		});
+	}
+	
+	ArrayList<UserInfo> userList = new ArrayList<UserInfo>();
+	ArrayList<ContentBean> cbList = new ArrayList<ContentBean>();
+	int i=0;
+	int j=0;
+	private void guanlian(){
+		BmobQuery<UserInfo> query = new BmobQuery<UserInfo>();
+		query.setLimit(2);
+		query.addWhereExists("uploadIds");
+		query.order("-updatedAt");
+		query.findObjects(this, new FindListener<UserInfo>() {
+			@Override
+			public void onError(int arg0, String arg1) {
+				
+			}
+
+			@Override
+			public void onSuccess(List<UserInfo> list) {
+				userList = (ArrayList<UserInfo>) list;
+				for (;i<list.size();i++){
+					cbList = list.get(i).getUploadIds();
+					
+						set(i,0);
+				}
+				
+			}
+		});
+	}
+	
+	private void set(final int i, final int pos){
+		BmobQuery<ContentBean> bq = new BmobQuery<ContentBean>();
+		bq.setLimit(1);
+		bq.addWhereEqualTo("contentUrl", cbList.get(j).getContentUrl());
+		bq.findObjects(AddImageTextActivity.this, new FindListener<ContentBean>() {
+			@Override
+			public void onError(int arg0, String arg1) {
+				
+			}
+
+			@Override
+			public void onSuccess(List<ContentBean> arg0) {
+				if(arg0!=null && arg0.size()>0){
+					cbList.get(pos).setImageId(arg0.get(0).getImageId());
+					cbList.get(pos).setContentId(arg0.get(0).getContentId());
+					cbList.get(pos).setId(arg0.get(0).getId());
+					cbList.get(pos).setZan(arg0.get(0).getZan());
+					cbList.get(pos).setUserId(arg0.get(0).getUserId());
+					userList.get(i).setUploadIds(cbList);
+					userList.get(i).update(AddImageTextActivity.this, new UpdateListener() {
+						@Override
+						public void onSuccess() {
+							Log.e("处理成功");
+							while(pos < (cbList.size()-1)){
+								set(i, pos+1);
+							}
+						}
+						
+						@Override
+						public void onFailure(int arg0, String arg1) {
+							
+						}
+					});
+				}else{
+					Log.e("未查到数据，可能还未通过审核");
+				}
 			}
 		});
 	}
